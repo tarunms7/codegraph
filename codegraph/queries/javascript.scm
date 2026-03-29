@@ -24,7 +24,6 @@
 (import_statement
   source: (string) @name.reference.import)
 
-; Class extends
+; Class extends (JS has no extends_clause wrapper — identifier is direct child of class_heritage)
 (class_heritage
-  (extends_clause
-    value: (identifier) @name.reference.inherit))
+  (identifier) @name.reference.inherit)

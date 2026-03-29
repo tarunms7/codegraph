@@ -101,7 +101,12 @@ def get_query(language: str) -> tree_sitter.Query | None:
 
     pack_name = _LANGUAGE_PACK_NAMES[language]
     lang_obj = get_language(pack_name)
-    query = tree_sitter.Query(lang_obj, query_text)
+    try:
+        query = tree_sitter.Query(lang_obj, query_text)
+    except Exception as exc:
+        logger.warning("Failed to compile query for %s: %s", language, exc)
+        _query_cache[language] = None
+        return None
     _query_cache[language] = query
     logger.debug("Loaded query for %s", language)
     return query
