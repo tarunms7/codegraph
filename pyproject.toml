@@ -54,4 +54,4 @@ select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-collect_ignore = ["tests/fixtures"]
+norecursedirs = ["tests/fixtures"]
