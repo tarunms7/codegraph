@@ -77,12 +77,6 @@ def render_context(
 
 def _get_summary(fi: FileInfo) -> str | None:
     """Extract first docstring line or generate summary from symbol names."""
-    # Look for a module-level docstring in the first symbol or content
-    for sym in fi.symbols:
-        if sym.kind.value in ("class", "module") and sym.signature:
-            # Check if there's a docstring in the signature (unlikely, but check)
-            pass
-
     # Generate summary from symbol names (C9 fallback)
     if fi.symbols:
         names = [s.name for s in fi.symbols[:5]]

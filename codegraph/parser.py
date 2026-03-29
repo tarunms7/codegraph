@@ -87,49 +87,6 @@ def _extract_signature(node: object, source_bytes: bytes) -> str:
     return first_line
 
 
-def _extract_docstring(node: object, source_bytes: bytes) -> str | None:
-    """Extract docstring or leading comment for a definition node.
-
-    Per C9: check if next sibling or first child of body block is a string node.
-    For Go/Rust/Java: look for comment node immediately before the definition.
-    """
-    def_node = node.parent if node.parent is not None else node
-
-    # Python-style: check body block's first child for expression_statement > string
-    for child in def_node.children:
-        if child.type in ("block", "body"):
-            if child.child_count > 0:
-                first_child = child.children[0]
-                if first_child.type == "expression_statement" and first_child.child_count > 0:
-                    string_node = first_child.children[0]
-                    if string_node.type == "string":
-                        text = source_bytes[string_node.start_byte : string_node.end_byte].decode(
-                            "utf-8", errors="replace"
-                        )
-                        # Strip quotes and take first line
-                        text = text.strip("\"'").strip()
-                        return text.split("\n", 1)[0].strip()
-
-    # Check next sibling for a comment
-    next_sib = def_node.next_named_sibling
-    if next_sib is not None and next_sib.type in ("comment", "line_comment", "block_comment"):
-        text = source_bytes[next_sib.start_byte : next_sib.end_byte].decode(
-            "utf-8", errors="replace"
-        )
-        text = text.lstrip("/#* ").rstrip()
-        return text.split("\n", 1)[0].strip()
-
-    # Check previous sibling for a comment (Go, Rust, Java style)
-    prev_sib = def_node.prev_named_sibling
-    if prev_sib is not None and prev_sib.type in ("comment", "line_comment", "block_comment"):
-        text = source_bytes[prev_sib.start_byte : prev_sib.end_byte].decode(
-            "utf-8", errors="replace"
-        )
-        text = text.lstrip("/#* ").rstrip()
-        return text.split("\n", 1)[0].strip()
-
-    return None
-
 
 def _find_enclosing_class(node: object) -> str | None:
     """Walk up the AST to find the enclosing class name for a method."""

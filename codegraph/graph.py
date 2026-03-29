@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import posixpath
 from pathlib import PurePosixPath
 
 import networkx as nx
@@ -462,4 +463,4 @@ def _dir_distance(dir_a: str, dir_b: str) -> int:
 
 def _normalize_path(path: str) -> str:
     """Normalize a path: resolve '..' and '.', remove leading './'."""
-    return str(PurePosixPath(os.path.normpath(path)))
+    return str(PurePosixPath(posixpath.normpath(path)))
