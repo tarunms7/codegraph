@@ -47,6 +47,7 @@ codegraph = ["queries/*.scm", "py.typed"]
 line-length = 100
 target-version = "py311"
 force-exclude = true
+exclude = ["tests/fixtures/edge_cases/syntax_error.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
