@@ -1001,5 +1001,3 @@ def helper_139(n: int) -> int:
 def helper_140(n: int) -> int:
     """Helper function 140."""
     return n + 140
-
-
