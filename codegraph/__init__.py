@@ -142,16 +142,26 @@ class CodeGraph:
                 cache = None
         self._cache_instance = cache
 
-        # Parse files, using cache where possible
+        # First pass: read each file once, compute SHA-256, check cache.
+        # Collect uncached files with their already-read bytes.
         files_dict: dict[str, FileInfo] = {}
+        uncached: list[str] = []
+        uncached_bytes: dict[str, bytes] = {}
 
         for fp in filtered:
             try:
                 with open(fp, "rb") as f:
-                    content_hash = hashlib.sha256(f.read()).hexdigest()
+                    file_bytes = f.read()
             except OSError:
                 continue
 
+            # Skip binary files (null byte in first 8KB)
+            if b"\x00" in file_bytes[:8192]:
+                rel_path = os.path.relpath(fp, self._repo_path)
+                files_dict[rel_path] = FileInfo(path=rel_path, language="binary", content_hash="")
+                continue
+
+            content_hash = hashlib.sha256(file_bytes).hexdigest()
             rel_path = os.path.relpath(fp, self._repo_path)
 
             if cache is not None:
@@ -164,16 +174,21 @@ class CodeGraph:
                     self._cache_hits += 1
                     continue
 
-            # Need to parse
+            # Need to parse — save already-read bytes
             self._cache_misses += 1
-            fi = parser_mod.parse_file(fp, self._repo_path)
-            files_dict[fi.path] = fi
+            uncached.append(fp)
+            uncached_bytes[fp] = file_bytes
 
-            if cache is not None:
-                try:
-                    cache.put(fi)
-                except CacheError as exc:
-                    logger.debug("Cache write failed for %s: %s", fi.path, exc)
+        # Second pass: parse uncached files in parallel, passing pre-read bytes
+        if uncached:
+            parsed = parser_mod.parse_files(uncached, self._repo_path, raw_bytes_map=uncached_bytes)
+            for rel_path, fi in parsed.items():
+                files_dict[rel_path] = fi
+                if cache is not None:
+                    try:
+                        cache.put(fi)
+                    except CacheError as exc:
+                        logger.debug("Cache write failed for %s: %s", fi.path, exc)
 
         # Remove stale cache entries
         if cache is not None:

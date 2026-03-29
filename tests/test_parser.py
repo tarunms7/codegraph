@@ -259,6 +259,79 @@ class TestParseFileEdgeCases:
 
 
 # ---------------------------------------------------------------------------
+# parse_file — raw_bytes parameter
+# ---------------------------------------------------------------------------
+
+
+class TestParseFileRawBytes:
+    def test_raw_bytes_matches_file_read(self):
+        """Passing raw_bytes should produce identical results to reading the file."""
+        fp = os.path.join(PY_PROJECT, "auth.py")
+        with open(fp, "rb") as f:
+            content = f.read()
+        info_normal = parse_file(fp, PY_PROJECT)
+        info_raw = parse_file(fp, PY_PROJECT, raw_bytes=content)
+        assert info_normal.path == info_raw.path
+        assert info_normal.language == info_raw.language
+        assert info_normal.content_hash == info_raw.content_hash
+        assert info_normal.lines == info_raw.lines
+        assert len(info_normal.symbols) == len(info_raw.symbols)
+        assert len(info_normal.references) == len(info_raw.references)
+
+    def test_raw_bytes_content_hash(self):
+        """Content hash should be computed from the provided raw_bytes."""
+        fp = os.path.join(PY_PROJECT, "auth.py")
+        with open(fp, "rb") as f:
+            content = f.read()
+        info = parse_file(fp, PY_PROJECT, raw_bytes=content)
+        assert info.content_hash == hashlib.sha256(content).hexdigest()
+
+    def test_raw_bytes_skips_file_read(self):
+        """When raw_bytes is given, a nonexistent path should still parse."""
+        code = b"def hello():\n    return 42\n"
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False) as f:
+            # Write a real file so the path has valid extension for detect_language
+            f.write(code)
+            f.flush()
+            path = f.name
+        try:
+            # Parse using the real path but with provided bytes
+            info = parse_file(path, tempfile.gettempdir(), raw_bytes=code)
+            assert info.language == "python"
+            names = {s.name for s in info.symbols}
+            assert "hello" in names
+            assert info.content_hash == hashlib.sha256(code).hexdigest()
+        finally:
+            os.unlink(path)
+
+    def test_raw_bytes_none_reads_file(self):
+        """raw_bytes=None (default) should behave like the original."""
+        fp = os.path.join(PY_PROJECT, "models.py")
+        info = parse_file(fp, PY_PROJECT, raw_bytes=None)
+        assert info.language == "python"
+        assert info.content_hash != ""
+        assert info.lines > 0
+
+    def test_raw_bytes_unicode_error(self):
+        """raw_bytes with invalid UTF-8 should return gracefully."""
+        fp = os.path.join(PY_PROJECT, "auth.py")
+        bad_bytes = b"\x80\x81\x82\xff\xfe"
+        info = parse_file(fp, PY_PROJECT, raw_bytes=bad_bytes)
+        assert info.language == "unknown"
+        assert info.content_hash == ""
+
+    def test_raw_bytes_typescript(self):
+        """raw_bytes should work for TypeScript files too."""
+        fp = os.path.join(TS_PROJECT, "auth.ts")
+        with open(fp, "rb") as f:
+            content = f.read()
+        info = parse_file(fp, TS_PROJECT, raw_bytes=content)
+        assert info.language == "typescript"
+        classes = [s for s in info.symbols if s.kind == SymbolKind.CLASS]
+        assert any(c.name == "AuthService" for c in classes)
+
+
+# ---------------------------------------------------------------------------
 # parse_files — parallel parsing
 # ---------------------------------------------------------------------------
 

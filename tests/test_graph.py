@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import networkx as nx
 
-from codegraph.graph import _detect_test_edges, build_graph, resolve_references
+from codegraph.graph import _detect_test_edges, _normalize_path, build_graph, resolve_references
 from codegraph.models import EdgeKind, FileInfo, Reference, Symbol, SymbolKind
 
 # ---------------------------------------------------------------------------
@@ -451,6 +451,23 @@ class TestDetectTestEdges:
         g.add_nodes_from(files.keys())
         _detect_test_edges(files, g)
         assert _has_edge_kind(g, "tests/test_auth.py", "auth.py", EdgeKind.TESTS)
+
+
+# ===================================================================
+# _normalize_path
+# ===================================================================
+
+
+def test_normalize_path_resolves_dotdot() -> None:
+    assert _normalize_path("a/../b/c.py") == "b/c.py"
+
+
+def test_normalize_path_removes_dot() -> None:
+    assert _normalize_path("./a/b.py") == "a/b.py"
+
+
+def test_normalize_path_no_change() -> None:
+    assert _normalize_path("a/b/c.py") == "a/b/c.py"
 
 
 # ===================================================================

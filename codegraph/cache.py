@@ -206,3 +206,13 @@ class IndexCache:
     def close(self) -> None:
         with self._lock:
             self._conn.close()
+
+    def __enter__(self) -> IndexCache:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        if hasattr(self, "_conn"):
+            self.close()

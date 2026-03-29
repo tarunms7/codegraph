@@ -345,6 +345,26 @@ class TestCorruptedDb:
         c.close()
 
 
+class TestContextManager:
+    def test_context_manager_put_and_get(self, cache_dir):
+        fi = _make_fileinfo()
+        with IndexCache(cache_dir) as c:
+            c.put(fi)
+            result = c.get("src/auth.py", "abc123")
+            assert result is not None
+            assert result.path == "src/auth.py"
+
+    def test_connection_closed_after_context(self, cache_dir):
+        fi = _make_fileinfo()
+        with IndexCache(cache_dir) as c:
+            c.put(fi)
+        # After exiting the context, the connection should be closed.
+        import sqlite3
+
+        with pytest.raises(sqlite3.ProgrammingError):
+            c._conn.execute("SELECT 1")
+
+
 class TestPersistence:
     def test_survives_close_and_reopen(self, cache_dir):
         c1 = IndexCache(cache_dir)
