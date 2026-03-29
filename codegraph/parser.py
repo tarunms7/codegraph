@@ -87,7 +87,6 @@ def _extract_signature(node: object, source_bytes: bytes) -> str:
     return first_line
 
 
-
 def _find_enclosing_class(node: object) -> str | None:
     """Walk up the AST to find the enclosing class name for a method."""
     current = node.parent
@@ -182,7 +181,7 @@ def _walk_python_relative_imports(
         _walk_python_relative_imports(child, source_bytes, rel_path, existing, refs)
 
 
-def parse_file(file_path: str, repo_root: str) -> FileInfo:
+def parse_file(file_path: str, repo_root: str, *, raw_bytes: bytes | None = None) -> FileInfo:
     """Parse a single source file and extract symbols and references.
 
     Never raises — returns empty/partial FileInfo on errors.
@@ -190,34 +189,45 @@ def parse_file(file_path: str, repo_root: str) -> FileInfo:
     Args:
         file_path: Absolute path to the file to parse.
         repo_root: Absolute path to the repository root.
+        raw_bytes: When provided, skip file read and binary detection — use
+            these bytes directly. Caller is responsible for having already
+            verified the file is not binary.
 
     Returns:
         FileInfo with extracted symbols, references, and metadata.
     """
     rel_path = os.path.relpath(file_path, repo_root)
 
-    # Binary detection: read first 8KB
-    try:
-        with open(file_path, "rb") as f:
-            head = f.read(8192)
-    except OSError as e:
-        logger.warning("Cannot read file %s: %s", rel_path, e)
-        return FileInfo(path=rel_path, language="unknown", content_hash="")
+    if raw_bytes is not None:
+        # Caller already read the file and verified it's not binary
+        try:
+            content = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            logger.warning("Unicode decode error in %s, skipping", rel_path)
+            return FileInfo(path=rel_path, language="unknown", content_hash="")
+    else:
+        # Binary detection: read first 8KB
+        try:
+            with open(file_path, "rb") as f:
+                head = f.read(8192)
+        except OSError as e:
+            logger.warning("Cannot read file %s: %s", rel_path, e)
+            return FileInfo(path=rel_path, language="unknown", content_hash="")
 
-    if b"\x00" in head:
-        return FileInfo(path=rel_path, language="binary", content_hash="")
+        if b"\x00" in head:
+            return FileInfo(path=rel_path, language="binary", content_hash="")
 
-    # Read full content
-    try:
-        with open(file_path, "rb") as f:
-            raw_bytes = f.read()
-        content = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        logger.warning("Unicode decode error in %s, skipping", rel_path)
-        return FileInfo(path=rel_path, language="unknown", content_hash="")
-    except OSError as e:
-        logger.warning("Cannot read file %s: %s", rel_path, e)
-        return FileInfo(path=rel_path, language="unknown", content_hash="")
+        # Read full content
+        try:
+            with open(file_path, "rb") as f:
+                raw_bytes = f.read()
+            content = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            logger.warning("Unicode decode error in %s, skipping", rel_path)
+            return FileInfo(path=rel_path, language="unknown", content_hash="")
+        except OSError as e:
+            logger.warning("Cannot read file %s: %s", rel_path, e)
+            return FileInfo(path=rel_path, language="unknown", content_hash="")
 
     content_hash = hashlib.sha256(raw_bytes).hexdigest()
     line_count = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
@@ -356,12 +366,20 @@ def parse_file(file_path: str, repo_root: str) -> FileInfo:
     )
 
 
-def parse_files(file_paths: list[str], repo_root: str) -> dict[str, FileInfo]:
+def parse_files(
+    file_paths: list[str],
+    repo_root: str,
+    *,
+    raw_bytes_map: dict[str, bytes] | None = None,
+) -> dict[str, FileInfo]:
     """Parse multiple files in parallel using ThreadPoolExecutor.
 
     Args:
         file_paths: List of absolute file paths to parse.
         repo_root: Absolute path to the repository root.
+        raw_bytes_map: Optional mapping of file_path -> already-read bytes.
+            When a file's bytes are provided, they are passed to parse_file
+            to avoid a redundant file read.
 
     Returns:
         Dict mapping relative path -> FileInfo.
@@ -371,8 +389,13 @@ def parse_files(file_paths: list[str], repo_root: str) -> dict[str, FileInfo]:
     if not file_paths:
         return results
 
+    rb_map = raw_bytes_map or {}
+
     with ThreadPoolExecutor() as executor:
-        futures = {executor.submit(parse_file, fp, repo_root): fp for fp in file_paths}
+        futures = {
+            executor.submit(parse_file, fp, repo_root, raw_bytes=rb_map.get(fp)): fp
+            for fp in file_paths
+        }
         for future in as_completed(futures):
             fp = futures[future]
             try:
