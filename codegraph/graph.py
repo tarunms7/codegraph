@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import posixpath
 from pathlib import PurePosixPath
 
