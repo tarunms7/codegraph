@@ -291,8 +291,11 @@ def _build_json_output(entries: list[dict], token_budget: int, total_files: int)
         "files_included": len(entries),
         "files_total": total_files,
     }
-    # Calculate actual token count
-    text = json.dumps(result)
-    result["token_count"] = count_tokens(text)
-    # Re-serialize with correct token count
+    # Iterate to get accurate token count (changing the count value changes the string)
+    for _ in range(3):
+        text = json.dumps(result)
+        actual = count_tokens(text)
+        if result["token_count"] == actual:
+            break
+        result["token_count"] = actual
     return json.dumps(result)
