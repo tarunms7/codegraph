@@ -360,6 +360,7 @@ class TestContextManager:
             c.put(fi)
         # After exiting the context, the connection should be closed.
         import sqlite3
+
         with pytest.raises(sqlite3.ProgrammingError):
             c._conn.execute("SELECT 1")
 
