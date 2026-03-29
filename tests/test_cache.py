@@ -359,7 +359,8 @@ class TestContextManager:
         with IndexCache(cache_dir) as c:
             c.put(fi)
         # After exiting the context, the connection should be closed.
-        with pytest.raises(Exception):
+        import sqlite3
+        with pytest.raises(sqlite3.ProgrammingError):
             c._conn.execute("SELECT 1")
 
 
