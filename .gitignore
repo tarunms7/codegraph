@@ -10,3 +10,7 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
+.venv/
+venv/
+node_modules/
+.env
