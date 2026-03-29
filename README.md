@@ -153,7 +153,7 @@ codegraph clear ./my-project
 codegraph --version
 ```
 
-All commands accept `--format json` for machine-readable output.
+The `map`, `context`, and `query` commands accept `--format json` for machine-readable output.
 
 ## How It Works
 
@@ -179,6 +179,8 @@ All commands accept `--format json` for machine-readable output.
 ## Performance
 
 First index of a 500-file repo completes in under 3 seconds. Subsequent calls take milliseconds — codegraph hashes every file and only re-parses what changed. Results are cached in a thread-safe SQLite database stored in `.codegraph/` at the repo root.
+
+Add `.codegraph/` to your `.gitignore` to avoid committing the cache directory.
 
 Zero external services. Zero network calls. Works offline, on CI, in Docker, anywhere Python runs.
 
