@@ -26,5 +26,4 @@
 
 ; Class extends
 (class_heritage
-  (extends_clause
-    value: (identifier) @name.reference.inherit))
+  (identifier) @name.reference.inherit)
