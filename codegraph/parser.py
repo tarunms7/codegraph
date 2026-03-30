@@ -61,7 +61,7 @@ _IMPORT_PATTERNS: dict[str, list[re.Pattern[str]]] = {
 }
 
 
-def _extract_signature(node: object, source_bytes: bytes) -> str:
+def _extract_signature(node: tree_sitter.Node, source_bytes: bytes) -> str:
     """Extract signature from a definition node.
 
     Per C8: get the parent (full definition) node, read source bytes for that range,
@@ -87,7 +87,7 @@ def _extract_signature(node: object, source_bytes: bytes) -> str:
     return first_line
 
 
-def _find_enclosing_class(node: object) -> str | None:
+def _find_enclosing_class(node: tree_sitter.Node) -> str | None:
     """Walk up the AST to find the enclosing class name for a method."""
     current = node.parent
     while current is not None:
@@ -244,6 +244,14 @@ def parse_file(file_path: str, repo_root: str, *, raw_bytes: bytes | None = None
             lines=line_count,
         )
 
+    if not content:
+        return FileInfo(
+            path=rel_path,
+            language=language,
+            content_hash=content_hash,
+            lines=0,
+        )
+
     # Get parser and parse
     try:
         parser = get_parser(language)
@@ -391,7 +399,7 @@ def parse_files(
 
     rb_map = raw_bytes_map or {}
 
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=min(32, (os.cpu_count() or 1) + 4)) as executor:
         futures = {
             executor.submit(parse_file, fp, repo_root, raw_bytes=rb_map.get(fp)): fp
             for fp in file_paths

@@ -373,6 +373,34 @@ class TestParseFiles:
         assert "auth.py" in results
         assert len(results) >= 1  # at least the good file
 
+    def test_parse_files_respects_thread_limit(self):
+        """parse_files with 50+ files should complete without error."""
+        code = b"def fn():\n    pass\n"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = []
+            for i in range(55):
+                fp = os.path.join(tmpdir, f"file_{i}.py")
+                with open(fp, "wb") as f:
+                    f.write(code)
+                paths.append(fp)
+            results = parse_files(paths, tmpdir)
+            assert len(results) == 55
+            for info in results.values():
+                assert info.language == "python"
+
+    def test_raw_bytes_empty(self):
+        """parse_file with raw_bytes=b'' returns FileInfo with language='python', 0 symbols, 0 lines."""
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False) as f:
+            f.write(b"placeholder")  # file needs to exist for detect_language
+            path = f.name
+        try:
+            info = parse_file(path, tempfile.gettempdir(), raw_bytes=b"")
+            assert info.language == "python"
+            assert info.symbols == []
+            assert info.lines == 0
+        finally:
+            os.unlink(path)
+
 
 # ---------------------------------------------------------------------------
 # _clean_import_text helper
