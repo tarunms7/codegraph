@@ -17,7 +17,7 @@ def main() -> None:
 
 
 @main.command()
-@click.argument("repo_path")
+@click.argument("repo_path", type=click.Path(exists=True, file_okay=False))
 @click.option("--budget", default=2048, type=int, help="Token budget (default 2048).")
 @click.option(
     "--format",
@@ -26,18 +26,21 @@ def main() -> None:
     type=click.Choice(["markdown", "json"]),
     help="Output format.",
 )
-def map(repo_path: str, budget: int, fmt: str) -> None:
+@click.option(
+    "--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated."
+)
+def map(repo_path: str, budget: int, fmt: str, language: tuple[str, ...]) -> None:
     """Generate a global repo map ranked by structural importance."""
     try:
-        cg = CodeGraph(repo_path)
+        cg = CodeGraph(repo_path, languages=list(language) if language else None)
         result = cg.repo_map(token_budget=budget, format=fmt)  # type: ignore[arg-type]
         click.echo(result)
-    except CodeGraphError as exc:
+    except (CodeGraphError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 
 @main.command()
-@click.argument("repo_path")
+@click.argument("repo_path", type=click.Path(exists=True, file_okay=False))
 @click.argument("files", nargs=-1, required=True)
 @click.option("--budget", default=4096, type=int, help="Token budget (default 4096).")
 @click.option(
@@ -47,18 +50,23 @@ def map(repo_path: str, budget: int, fmt: str) -> None:
     type=click.Choice(["markdown", "json"]),
     help="Output format.",
 )
-def context(repo_path: str, files: tuple[str, ...], budget: int, fmt: str) -> None:
+@click.option(
+    "--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated."
+)
+def context(
+    repo_path: str, files: tuple[str, ...], budget: int, fmt: str, language: tuple[str, ...]
+) -> None:
     """Get ranked context relevant to specific files."""
     try:
-        cg = CodeGraph(repo_path)
+        cg = CodeGraph(repo_path, languages=list(language) if language else None)
         result = cg.context_for(list(files), token_budget=budget, format=fmt)  # type: ignore[arg-type]
         click.echo(result)
-    except CodeGraphError as exc:
+    except (CodeGraphError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 
 @main.command()
-@click.argument("repo_path")
+@click.argument("repo_path", type=click.Path(exists=True, file_okay=False))
 @click.argument("text")
 @click.option("--budget", default=4096, type=int, help="Token budget (default 4096).")
 @click.option(
@@ -68,13 +76,16 @@ def context(repo_path: str, files: tuple[str, ...], budget: int, fmt: str) -> No
     type=click.Choice(["markdown", "json"]),
     help="Output format.",
 )
-def query(repo_path: str, text: str, budget: int, fmt: str) -> None:
+@click.option(
+    "--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated."
+)
+def query(repo_path: str, text: str, budget: int, fmt: str, language: tuple[str, ...]) -> None:
     """Get ranked context relevant to a natural language query."""
     try:
-        cg = CodeGraph(repo_path)
+        cg = CodeGraph(repo_path, languages=list(language) if language else None)
         result = cg.query(text, token_budget=budget, format=fmt)  # type: ignore[arg-type]
         click.echo(result)
-    except CodeGraphError as exc:
+    except (CodeGraphError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
 

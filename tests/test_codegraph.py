@@ -7,8 +7,9 @@ import os
 import subprocess
 
 import networkx as nx
+import pytest
 
-from codegraph import CodeGraph
+from codegraph import CodeGraph, CodeGraphError
 from codegraph.renderer import count_tokens
 
 
@@ -288,3 +289,38 @@ class TestCodeGraphRefresh:
         cg.refresh()
         refreshed_symbols = sum(len(s) for s in cg.symbols.values())
         assert refreshed_symbols > initial_symbols
+
+
+class TestCodeGraphInputValidation:
+    def test_nonexistent_repo_path_raises(self):
+        with pytest.raises(CodeGraphError):
+            CodeGraph("/nonexistent/path/xyz")
+
+    def test_file_as_repo_path_raises(self, tmp_path):
+        f = tmp_path / "file.py"
+        f.write_text("x")
+        with pytest.raises(CodeGraphError):
+            CodeGraph(str(f))
+
+    def test_negative_budget_context_for_raises(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        with pytest.raises(CodeGraphError):
+            cg.context_for(["auth.py"], token_budget=-1)
+
+    def test_negative_budget_query_raises(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        with pytest.raises(CodeGraphError):
+            cg.query("auth", token_budget=-1)
+
+    def test_negative_budget_repo_map_raises(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        with pytest.raises(CodeGraphError):
+            cg.repo_map(token_budget=-1)
+
+    def test_empty_query_returns_empty(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        assert cg.query("   ") == ""
+
+    def test_empty_files_returns_empty(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        assert cg.context_for([]) == ""
