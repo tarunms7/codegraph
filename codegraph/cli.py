@@ -26,7 +26,9 @@ def main() -> None:
     type=click.Choice(["markdown", "json"]),
     help="Output format.",
 )
-@click.option("--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated.")
+@click.option(
+    "--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated."
+)
 def map(repo_path: str, budget: int, fmt: str, language: tuple[str, ...]) -> None:
     """Generate a global repo map ranked by structural importance."""
     try:
@@ -48,8 +50,12 @@ def map(repo_path: str, budget: int, fmt: str, language: tuple[str, ...]) -> Non
     type=click.Choice(["markdown", "json"]),
     help="Output format.",
 )
-@click.option("--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated.")
-def context(repo_path: str, files: tuple[str, ...], budget: int, fmt: str, language: tuple[str, ...]) -> None:
+@click.option(
+    "--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated."
+)
+def context(
+    repo_path: str, files: tuple[str, ...], budget: int, fmt: str, language: tuple[str, ...]
+) -> None:
     """Get ranked context relevant to specific files."""
     try:
         cg = CodeGraph(repo_path, languages=list(language) if language else None)
@@ -70,7 +76,9 @@ def context(repo_path: str, files: tuple[str, ...], budget: int, fmt: str, langu
     type=click.Choice(["markdown", "json"]),
     help="Output format.",
 )
-@click.option("--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated.")
+@click.option(
+    "--language", "language", multiple=True, help="Filter to specific language(s). Can be repeated."
+)
 def query(repo_path: str, text: str, budget: int, fmt: str, language: tuple[str, ...]) -> None:
     """Get ranked context relevant to a natural language query."""
     try:

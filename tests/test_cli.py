@@ -120,7 +120,9 @@ class TestLanguageFilter:
         assert result.exit_code == 0
 
     def test_context_language_filter(self, runner, sample_repo):
-        result = runner.invoke(main, ["context", str(sample_repo), "auth.py", "--language", "python"])
+        result = runner.invoke(
+            main, ["context", str(sample_repo), "auth.py", "--language", "python"]
+        )
         assert result.exit_code == 0
 
     def test_query_language_filter(self, runner, sample_repo):
