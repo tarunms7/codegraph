@@ -308,12 +308,24 @@ class TestEdgeCases:
         assert "### only.py" in result
 
     def test_tier1_overflow_still_renders_tier2(self):
-        """When first tier 1 file exceeds budget, tier 2 files still appear."""
-        # Create 10 files; the first has many symbols that exceed a small budget
+        """When first tier 1 file overflows, remaining tier 1 files still render.
+
+        With `break` (old code), the tier 1 loop exits after trimming big.py,
+        so small_1.py and small_2.py (also tier 1) are skipped.
+        With `continue` (fixed code), they are still processed.
+        """
+        # Create 10 files so tier partitioning gives us:
+        #   tier1 = [big.py, small_1.py, small_2.py]  (indices 0-2)
+        #   tier2 = [small_3.py, small_4.py, small_5.py]  (indices 3-5)
+        # big.py has very expensive symbols: each signature is so long that
+        # even 1 symbol in the trimmed output exceeds the per-file remaining
+        # budget. _render_tier1_md_trimmed returns just the bare header (~5
+        # tokens), leaving plenty of budget for subsequent files.
+        long_param_list = ", ".join(f"p{j}: int" for j in range(40))
         big_symbols = [
             _make_symbol(
                 f"func_{i}",
-                sig=f"def func_{i}(x: int, y: str, z: float) -> dict[str, Any]",
+                sig=f"def func_{i}({long_param_list}) -> None",
             )
             for i in range(30)
         ]
@@ -321,25 +333,25 @@ class TestEdgeCases:
 
         files = {}
         ranked = []
-        # File 0: huge tier 1 file
         files["big.py"] = _make_fi("big.py", symbols=big_symbols)
         ranked.append(("big.py", 1.0))
-        # Files 1-9: small files (some will be tier 2)
         for i in range(1, 10):
             path = f"small_{i}.py"
             files[path] = _make_fi(path, symbols=small_symbols)
             ranked.append((path, 0.9 - i * 0.05))
 
-        # Budget large enough for header + a few small files but not big.py fully
+        # Budget: big.py full section hugely exceeds this. Even 1 trimmed
+        # symbol + overhead > remaining, so trimmer returns just the header
+        # (~5 tokens). This leaves ~195 tokens for remaining tier 1/2 files.
         budget = 200
         result = render_context(ranked, files, budget)
 
-        # Tier 2 files should still appear even though tier 1 file was oversized
-        # With 10 files: tier1 = files[0:3], tier2 = files[3:6], tier3 = files[6:8]
-        # At minimum, some tier 2 content should render
         assert count_tokens(result) <= budget
-        # The result should contain more than just the header
-        assert "### " in result
+        # Key assertion: small_1.py or small_2.py (tier 1 files AFTER big.py)
+        # must appear. With the old `break`, they would be skipped entirely.
+        assert "### small_1.py" in result or "### small_2.py" in result, (
+            f"Remaining tier 1 files missing after overflow:\n{result}"
+        )
 
     def test_empty_ranked_files_with_budget(self):
         """render_context([], {}, 1000) includes 'No files' indication."""
