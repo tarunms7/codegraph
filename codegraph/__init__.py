@@ -56,6 +56,10 @@ class CodeGraph:
         languages: list[str] | None = None,
     ) -> None:
         self._repo_path = str(Path(repo_path).resolve())
+        if not Path(self._repo_path).exists():
+            raise CodeGraphError(f"repo_path does not exist: {self._repo_path}")
+        if Path(self._repo_path).is_file():
+            raise CodeGraphError(f"repo_path must be a directory, got a file: {self._repo_path}")
         self._use_cache = cache
         self._languages = languages
         self._cache_hits = 0
@@ -225,6 +229,10 @@ class CodeGraph:
         format: Format = "markdown",
     ) -> str:
         """Get ranked context relevant to specific files."""
+        if token_budget <= 0:
+            raise CodeGraphError(f"token_budget must be positive, got {token_budget}")
+        if not files:
+            return ""
         from codegraph import ranker as ranker_mod
         from codegraph import renderer as renderer_mod
 
@@ -256,6 +264,10 @@ class CodeGraph:
         format: Format = "markdown",
     ) -> str:
         """Get ranked context relevant to a natural language query."""
+        if token_budget <= 0:
+            raise CodeGraphError(f"token_budget must be positive, got {token_budget}")
+        if not text or not text.strip():
+            return ""
         from codegraph import ranker as ranker_mod
         from codegraph import renderer as renderer_mod
 
@@ -271,6 +283,8 @@ class CodeGraph:
         format: Format = "markdown",
     ) -> str:
         """Get a global repo map ranked by structural importance."""
+        if token_budget <= 0:
+            raise CodeGraphError(f"token_budget must be positive, got {token_budget}")
         from codegraph import ranker as ranker_mod
         from codegraph import renderer as renderer_mod
 

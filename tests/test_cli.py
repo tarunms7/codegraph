@@ -112,3 +112,24 @@ class TestClearCommand:
         result = runner.invoke(main, ["clear", str(tmp_path)])
         assert result.exit_code == 0
         assert "No cache directory found" in result.output
+
+
+class TestLanguageFilter:
+    def test_map_language_filter(self, runner, sample_repo):
+        result = runner.invoke(main, ["map", str(sample_repo), "--language", "python"])
+        assert result.exit_code == 0
+
+    def test_context_language_filter(self, runner, sample_repo):
+        result = runner.invoke(
+            main, ["context", str(sample_repo), "auth.py", "--language", "python"]
+        )
+        assert result.exit_code == 0
+
+    def test_query_language_filter(self, runner, sample_repo):
+        result = runner.invoke(main, ["query", str(sample_repo), "auth", "--language", "python"])
+        assert result.exit_code == 0
+
+    def test_map_invalid_path_clean_error(self, runner):
+        result = runner.invoke(main, ["map", "/nonexistent/path/xyz"])
+        assert result.exit_code != 0
+        assert "Error" in result.output

@@ -117,6 +117,7 @@ class IndexCache:
         db_path = os.path.join(cache_dir, "index.db")
         logger.debug("Cache location: %s", db_path)
         self._lock = threading.Lock()
+        self._closed = False
         try:
             self._conn = sqlite3.connect(db_path, check_same_thread=False)
             self._conn.execute(_CREATE_TABLE)
@@ -138,6 +139,8 @@ class IndexCache:
                 raise CacheError(f"Failed to create cache database: {inner_exc}") from inner_exc
 
     def get(self, file_path: str, content_hash: str) -> FileInfo | None:
+        if self._closed:
+            raise CacheError("Cache is closed")
         with self._lock:
             try:
                 cur = self._conn.execute(
@@ -155,6 +158,8 @@ class IndexCache:
                 raise CacheError(f"Failed to read cache for {file_path}: {exc}") from exc
 
     def put(self, file_info: FileInfo) -> None:
+        if self._closed:
+            raise CacheError("Cache is closed")
         with self._lock:
             try:
                 self._conn.execute(
@@ -177,6 +182,8 @@ class IndexCache:
                 raise CacheError(f"Failed to write cache for {file_info.path}: {exc}") from exc
 
     def invalidate(self, file_path: str) -> None:
+        if self._closed:
+            raise CacheError("Cache is closed")
         with self._lock:
             try:
                 self._conn.execute("DELETE FROM files WHERE path = ?", (file_path,))
@@ -185,6 +192,8 @@ class IndexCache:
                 raise CacheError(f"Failed to invalidate cache for {file_path}: {exc}") from exc
 
     def clear(self) -> None:
+        if self._closed:
+            raise CacheError("Cache is closed")
         with self._lock:
             try:
                 self._conn.execute("DELETE FROM files")
@@ -193,6 +202,8 @@ class IndexCache:
                 raise CacheError(f"Failed to clear cache: {exc}") from exc
 
     def get_all(self) -> dict[str, FileInfo]:
+        if self._closed:
+            raise CacheError("Cache is closed")
         with self._lock:
             try:
                 cur = self._conn.execute(
@@ -204,8 +215,11 @@ class IndexCache:
                 raise CacheError(f"Failed to read all cache entries: {exc}") from exc
 
     def close(self) -> None:
+        if self._closed:
+            return
         with self._lock:
             self._conn.close()
+            self._closed = True
 
     def __enter__(self) -> IndexCache:
         return self
@@ -214,5 +228,7 @@ class IndexCache:
         self.close()
 
     def __del__(self) -> None:
-        if hasattr(self, "_conn"):
+        try:
             self.close()
+        except Exception:
+            pass

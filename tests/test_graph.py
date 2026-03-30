@@ -458,6 +458,111 @@ class TestDetectTestEdges:
 # ===================================================================
 
 
+# ===================================================================
+# Go dir index resolution
+# ===================================================================
+
+
+class TestResolveGoDirIndex:
+    def test_resolve_go_uses_dir_index(self):
+        """Verify Go import resolution finds the right file via dir index."""
+        main_go = _make_fi("cmd/server/main.go", language="go")
+        handler_go = _make_fi(
+            "internal/handler/handler.go",
+            language="go",
+            symbols=[_make_symbol("Handle", SymbolKind.FUNCTION, "internal/handler/handler.go")],
+            refs=[
+                Reference(
+                    source_file="internal/handler/handler.go",
+                    target_name="cmd/server",
+                    kind=EdgeKind.IMPORTS,
+                ),
+            ],
+        )
+        files = {
+            "cmd/server/main.go": main_go,
+            "internal/handler/handler.go": handler_go,
+        }
+        resolved = resolve_references(files)
+        handler_refs = [r for r in resolved if r.source_file == "internal/handler/handler.go"]
+        assert any(r.target_file == "cmd/server/main.go" for r in handler_refs)
+
+
+# ===================================================================
+# _resolve_by_symbol excludes self
+# ===================================================================
+
+
+class TestResolveBySymbolExcludesSelf:
+    def test_resolve_by_symbol_excludes_self(self):
+        """A file referencing its own symbol should not create a self-edge."""
+        a = _make_fi(
+            "pkg/utils.py",
+            symbols=[_make_symbol("helper", SymbolKind.FUNCTION, "pkg/utils.py")],
+            refs=[
+                Reference(source_file="pkg/utils.py", target_name="helper", kind=EdgeKind.CALLS),
+            ],
+        )
+        files = {"pkg/utils.py": a}
+        resolved = resolve_references(files)
+        # Should produce no resolved references (only candidate is self)
+        assert len(resolved) == 0
+
+
+# ===================================================================
+# Java determinism
+# ===================================================================
+
+
+class TestResolveJavaDeterministic:
+    def test_resolve_java_deterministic(self):
+        """Run Java resolution 10 times on same input, verify same output each time."""
+        service_a = _make_fi(
+            "com/example/ServiceA.java",
+            language="java",
+            symbols=[
+                _make_symbol("ServiceA", SymbolKind.CLASS, "com/example/ServiceA.java"),
+            ],
+        )
+        service_b = _make_fi(
+            "com/other/ServiceA.java",
+            language="java",
+            symbols=[
+                _make_symbol("ServiceA", SymbolKind.CLASS, "com/other/ServiceA.java"),
+            ],
+        )
+        caller = _make_fi(
+            "app/Main.java",
+            language="java",
+            refs=[
+                Reference(
+                    source_file="app/Main.java",
+                    target_name="com.example.ServiceA",
+                    kind=EdgeKind.IMPORTS,
+                ),
+            ],
+        )
+        files = {
+            "com/example/ServiceA.java": service_a,
+            "com/other/ServiceA.java": service_b,
+            "app/Main.java": caller,
+        }
+        results = []
+        for _ in range(10):
+            resolved = resolve_references(files)
+            targets = tuple(
+                sorted(r.target_file for r in resolved if r.source_file == "app/Main.java")
+            )
+            results.append(targets)
+        # All 10 runs must produce identical results
+        assert all(r == results[0] for r in results), f"Non-deterministic results: {results}"
+
+
+# ===================================================================
+# _normalize_path
+# ===================================================================
+
+
 def test_normalize_path_resolves_dotdot() -> None:
     assert _normalize_path("a/../b/c.py") == "b/c.py"
 

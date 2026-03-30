@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 
 from codegraph.cache import IndexCache
+from codegraph.exceptions import CacheError
 from codegraph.models import EdgeKind, FileInfo, Reference, Symbol, SymbolKind
 
 
@@ -363,6 +364,33 @@ class TestContextManager:
 
         with pytest.raises(sqlite3.ProgrammingError):
             c._conn.execute("SELECT 1")
+
+
+class TestCloseRobustness:
+    def test_double_close_no_error(self, cache_dir):
+        c = IndexCache(cache_dir)
+        c.close()
+        c.close()  # must not raise
+
+    def test_operations_after_close_raise(self, cache_dir):
+        c = IndexCache(cache_dir)
+        fi = _make_fileinfo()
+        c.close()
+        with pytest.raises(CacheError):
+            c.get("src/auth.py", "abc123")
+        with pytest.raises(CacheError):
+            c.put(fi)
+        with pytest.raises(CacheError):
+            c.invalidate("src/auth.py")
+        with pytest.raises(CacheError):
+            c.clear()
+        with pytest.raises(CacheError):
+            c.get_all()
+
+    def test_del_safe_after_close(self, cache_dir):
+        c = IndexCache(cache_dir)
+        c.close()
+        del c  # must not raise
 
 
 class TestPersistence:
