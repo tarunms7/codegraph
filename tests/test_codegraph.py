@@ -6,9 +6,8 @@ import json
 import os
 import subprocess
 
-import pytest
-
 import networkx as nx
+import pytest
 
 from codegraph import CodeGraph, CodeGraphError
 from codegraph.renderer import count_tokens
