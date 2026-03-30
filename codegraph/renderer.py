@@ -95,9 +95,15 @@ def _render_markdown(
     """Render markdown output."""
     parts: list[str] = ["## Relevant Context\n"]
     current_tokens = count_tokens(parts[0])
+    any_content = False
+
+    # Minimum tokens needed for a filename header (e.g. "\n### path\n\n")
+    _MIN_HEADER_TOKENS = 20
 
     # Tier 1: full signatures
     for path, _rank in tier1:
+        if token_budget - current_tokens < _MIN_HEADER_TOKENS:
+            break
         fi = file_infos.get(path)
         section = _render_tier1_md(path, fi)
         section_tokens = count_tokens(section)
@@ -107,19 +113,24 @@ def _render_markdown(
             if trimmed:
                 parts.append(trimmed)
                 current_tokens += count_tokens(trimmed)
-            break
+                any_content = True
+            continue
         parts.append(section)
         current_tokens += section_tokens
+        any_content = True
 
     # Tier 2: names only
     for path, _rank in tier2:
+        if token_budget - current_tokens < _MIN_HEADER_TOKENS:
+            break
         fi = file_infos.get(path)
         section = _render_tier2_md(path, fi)
         section_tokens = count_tokens(section)
         if current_tokens + section_tokens > token_budget:
-            break
+            continue
         parts.append(section)
         current_tokens += section_tokens
+        any_content = True
 
     # Tier 3: path + summary as a single "Related files" block
     if tier3:
@@ -142,7 +153,12 @@ def _render_markdown(
                 current_tokens += line_tokens
             if len(related_parts) > 1:
                 parts.extend(related_parts)
+                any_content = True
 
+    if not any_content:
+        parts.append("<!-- No files to display -->\n")
+
+    # Single part (just header) needs \n join; multiple parts already contain newlines
     return "\n".join(parts) if len(parts) == 1 else "".join(parts)
 
 
@@ -286,10 +302,10 @@ def _build_json_output(entries: list[dict], token_budget: int, total_files: int)
         "files_total": total_files,
     }
     # Iterate to get accurate token count (changing the count value changes the string)
-    for _ in range(3):
+    for _ in range(5):
         text = json.dumps(result)
         actual = count_tokens(text)
-        if result["token_count"] == actual:
+        if abs(result["token_count"] - actual) <= 1:
             break
         result["token_count"] = actual
     return json.dumps(result)
