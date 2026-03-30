@@ -389,7 +389,7 @@ class TestParseFiles:
                 assert info.language == "python"
 
     def test_raw_bytes_empty(self):
-        """parse_file with raw_bytes=b'' returns FileInfo with language='python', 0 symbols, 0 lines."""
+        """parse_file with empty raw_bytes returns FileInfo with python language, no symbols."""
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False) as f:
             f.write(b"placeholder")  # file needs to exist for detect_language
             path = f.name
