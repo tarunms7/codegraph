@@ -48,6 +48,13 @@ def resolve_references(files: dict[str, FileInfo]) -> list[Reference]:
             symbol_lookup.setdefault(sym.name, []).append(path)
 
     all_paths = set(files.keys())
+
+    # Build directory-to-paths index for O(1) Go import resolution
+    dir_index: dict[str, list[str]] = {}
+    for p in all_paths:
+        dir_path = str(PurePosixPath(p).parent)
+        dir_index.setdefault(dir_path, []).append(p)
+
     resolved: list[Reference] = []
 
     for path, fi in files.items():
@@ -56,7 +63,7 @@ def resolve_references(files: dict[str, FileInfo]) -> list[Reference]:
                 resolved.append(ref)
                 continue
 
-            targets = _resolve_single(ref, path, fi.language, all_paths, symbol_lookup)
+            targets = _resolve_single(ref, path, fi.language, all_paths, symbol_lookup, dir_index)
             for t in targets:
                 resolved.append(
                     Reference(
@@ -101,6 +108,7 @@ def _resolve_single(
     language: str,
     all_paths: set[str],
     symbol_lookup: dict[str, list[str]],
+    dir_index: dict[str, list[str]] | None = None,
 ) -> list[str]:
     """Resolve a single reference to zero or more target file paths."""
     target_name = ref.target_name
@@ -110,7 +118,7 @@ def _resolve_single(
     if language in ("typescript", "javascript"):
         return _resolve_ts_js(target_name, source_path, all_paths, symbol_lookup)
     if language == "go":
-        return _resolve_go(target_name, all_paths)
+        return _resolve_go(target_name, all_paths, dir_index or {})
     if language == "rust":
         return _resolve_rust(target_name, source_path, all_paths, symbol_lookup)
     if language == "java":
@@ -127,6 +135,7 @@ def _resolve_python(
     symbol_lookup: dict[str, list[str]],
 ) -> list[str]:
     """Resolve a Python import reference."""
+    target_name = target_name.strip()
     source_dir = str(PurePosixPath(source_path).parent)
 
     # Relative import (starts with .)
@@ -221,13 +230,22 @@ def _resolve_ts_js(
     return []
 
 
-def _resolve_go(target_name: str, all_paths: set[str]) -> list[str]:
-    """Resolve a Go import by matching path suffix against repo dirs."""
-    # Match import path suffix against directory structure
-    for path in all_paths:
-        dir_path = str(PurePosixPath(path).parent)
-        if dir_path == target_name or dir_path.endswith(f"/{target_name}"):
-            return [path]
+def _resolve_go(
+    target_name: str, all_paths: set[str], dir_index: dict[str, list[str]]
+) -> list[str]:
+    """Resolve a Go import by matching path suffix against a directory index."""
+    # Direct match on directory path
+    if target_name in dir_index:
+        return sorted(dir_index[target_name])
+
+    # Suffix match: check directories ending with /target_name
+    suffix = f"/{target_name}"
+    matches: list[str] = []
+    for dir_path, files in dir_index.items():
+        if dir_path.endswith(suffix):
+            matches.extend(files)
+    if matches:
+        return sorted(matches)
     return []
 
 
@@ -278,18 +296,30 @@ def _resolve_java(
     if path_from_import in all_paths:
         return [path_from_import]
 
-    # Try matching just the class name
+    # Try matching just the class name — collect all matches for determinism
     class_name = target_name.rsplit(".", 1)[-1]
-    for p in all_paths:
-        if p.endswith(f"/{class_name}.java") or p == f"{class_name}.java":
-            return [p]
+    class_matches = [
+        p for p in all_paths if p.endswith(f"/{class_name}.java") or p == f"{class_name}.java"
+    ]
+    if len(class_matches) == 1:
+        return class_matches
+    if len(class_matches) > 1:
+        # Prefer the one whose directory path is closest to the import path
+        import_dir = target_name.rsplit(".", 1)[0].replace(".", "/") if "." in target_name else ""
+        if import_dir:
+            containing = [p for p in class_matches if import_dir in p]
+            if len(containing) == 1:
+                return containing
+            if containing:
+                return [sorted(containing)[0]]
+        return [sorted(class_matches)[0]]
 
     # Wildcard: com.example.* → com/example/ directory
     if target_name.endswith(".*"):
         dir_prefix = target_name[:-2].replace(".", "/")
         matches = [p for p in all_paths if p.startswith(dir_prefix + "/") and p.endswith(".java")]
         if matches:
-            return matches
+            return sorted(matches)
 
     return _resolve_by_symbol(class_name, "", all_paths, symbol_lookup)
 
@@ -302,6 +332,8 @@ def _resolve_by_symbol(
 ) -> list[str]:
     """Resolve by symbol name lookup with C7 collision resolution."""
     candidates = symbol_lookup.get(symbol_name, [])
+    # Exclude self-references
+    candidates = [c for c in candidates if c != source_path]
     if not candidates:
         return []
     if len(candidates) == 1:
