@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/codegraph.svg)](https://pypi.org/project/codegraph/)
 
-**Ranked, token-budget-aware code context for LLMs and AI agents.**
+**Stop stuffing LLMs with your entire codebase. codegraph ranks what matters.**
 
 Wrong context is worse than no context. Research shows LLMs degrade when stuffed with irrelevant code — they hallucinate more, follow instructions worse, and produce lower-quality output. codegraph uses tree-sitter static analysis and PageRank to give your agents exactly the files and symbols they need, nothing more.
 
