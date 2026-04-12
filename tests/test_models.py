@@ -6,7 +6,17 @@ import copy
 
 import pytest
 
-from codegraph.models import EdgeKind, FileInfo, Reference, Symbol, SymbolKind
+from codegraph.models import (
+    EdgeKind,
+    EvidenceFile,
+    EvidenceNeighbor,
+    EvidencePack,
+    EvidenceSymbol,
+    FileInfo,
+    Reference,
+    Symbol,
+    SymbolKind,
+)
 
 # ---------------------------------------------------------------------------
 # SymbolKind
@@ -200,3 +210,71 @@ class TestFileInfo:
         fi2 = copy.copy(fi)
         assert fi2.path == fi.path
         assert fi2.lines == fi.lines
+
+
+# ---------------------------------------------------------------------------
+# Evidence models
+# ---------------------------------------------------------------------------
+
+
+class TestEvidenceModels:
+    def test_evidence_symbol_to_dict(self):
+        symbol = EvidenceSymbol(
+            name="authenticate",
+            kind=SymbolKind.FUNCTION,
+            line=12,
+            end_line=16,
+            signature="def authenticate(token: str) -> User",
+            score=19.5,
+            matched_terms=("authenticate", "token"),
+            reasons=("query-term-match", "strong-symbol-match"),
+        )
+        data = symbol.to_dict()
+        assert data["kind"] == "function"
+        assert data["end_line"] == 16
+        assert data["matched_terms"] == ["authenticate", "token"]
+
+    def test_evidence_file_to_dict(self):
+        file_result = EvidenceFile(
+            path="auth.py",
+            rank=0.92,
+            language="python",
+            summary="Defines: authenticate",
+            matched_terms=("authenticate",),
+            reasons=("path-match", "symbol-match"),
+            symbols=(
+                EvidenceSymbol(
+                    name="authenticate",
+                    kind=SymbolKind.FUNCTION,
+                    line=10,
+                    signature="def authenticate()",
+                ),
+            ),
+            neighbors=(
+                EvidenceNeighbor(
+                    path="models.py",
+                    kind=EdgeKind.IMPORTS,
+                    direction="outgoing",
+                    symbols=("User",),
+                ),
+            ),
+            focus_range=(10, 10),
+        )
+        data = file_result.to_dict()
+        assert data["focus_range"] == [10, 10]
+        assert data["neighbors"][0]["kind"] == "imports"
+        assert data["symbols"][0]["name"] == "authenticate"
+
+    def test_evidence_pack_to_dict(self):
+        pack = EvidencePack(
+            mode="query",
+            query="authenticate token",
+            confidence=0.91,
+            files=(),
+            matched_terms=("authenticate",),
+            missed_terms=("token",),
+        )
+        data = pack.to_dict()
+        assert data["mode"] == "query"
+        assert data["confidence"] == 0.91
+        assert data["missed_terms"] == ["token"]

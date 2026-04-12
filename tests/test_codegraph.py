@@ -49,6 +49,35 @@ class TestCodeGraphPythonProject:
         assert isinstance(result, str)
         assert len(result) > 0
 
+    def test_query_prefers_relevant_file_in_json(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        result = cg.query("authenticate token", format="json")
+        data = json.loads(result)
+        assert data["files"]
+        assert data["files"][0]["path"] == "auth.py"
+
+    def test_evidence_for_query_returns_structured_pack(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        pack = cg.evidence_for_query("authenticate token", limit=3, symbol_limit=2)
+        data = pack.to_dict()
+        assert data["mode"] == "query"
+        assert data["query"] == "authenticate token"
+        assert data["files"]
+        assert data["files"][0]["path"] == "auth.py"
+        assert data["files"][0]["symbols"]
+        assert data["files"][0]["focus_range"] is not None
+        assert data["confidence"] > 0
+
+    def test_evidence_for_files_keeps_seed_first(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        pack = cg.evidence_for_files(["auth.py"], limit=3)
+        data = pack.to_dict()
+        assert data["mode"] == "files"
+        assert data["seed_files"] == ["auth.py"]
+        assert data["files"]
+        assert data["files"][0]["path"] == "auth.py"
+        assert "seed-file" in data["files"][0]["reasons"]
+
     def test_repo_map(self, py_project):
         cg = CodeGraph(py_project, cache=False)
         result = cg.repo_map()
@@ -182,6 +211,13 @@ class TestCodeGraphSingleFile:
         result = cg.context_for(["hello.py"])
         assert isinstance(result, str)
         assert len(result) > 0
+
+    def test_context_for_json_keeps_seed_file_first(self, py_project):
+        cg = CodeGraph(py_project, cache=False)
+        result = cg.context_for(["auth.py"], format="json")
+        data = json.loads(result)
+        assert data["files"]
+        assert data["files"][0]["path"] == "auth.py"
 
 
 class TestCodeGraphCache:

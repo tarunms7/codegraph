@@ -14,6 +14,8 @@ from codegraph.models import FileInfo, Symbol
 logger = logging.getLogger("codegraph")
 
 Format = Literal["markdown", "json"]
+_MIN_RENDER_CANDIDATES = 12
+_MAX_RENDER_CANDIDATES = 128
 
 # Module-level cached encoding
 _encoding: tiktoken.Encoding | None = None
@@ -59,6 +61,16 @@ def render_context(
                 }
             )
         return ""
+
+    # Rendering cost grows quickly with large ranked lists while the useful
+    # output remains concentrated at the top. Bound the candidate set to a
+    # budget-scaled window so small budgets don't waste time trimming hundreds
+    # of irrelevant tail entries.
+    candidate_limit = max(
+        _MIN_RENDER_CANDIDATES,
+        min(_MAX_RENDER_CANDIDATES, max(1, token_budget // 24)),
+    )
+    ranked_files = ranked_files[:candidate_limit]
 
     # Partition into tiers
     t1_end = max(1, math.ceil(total_files * 0.3)) if total_files > 0 else 0
@@ -279,12 +291,34 @@ def _render_json(
     for path, rank in tier3:
         entries.append(_file_entry(path, rank, 3, []))
 
-    # Progressively trim to fit token budget
+    # Progressively compact to fit token budget before dropping entries entirely.
     while entries:
         output = _build_json_output(entries, token_budget, total_files)
         if count_tokens(output) <= token_budget:
             return output
-        # Remove last entry to fit
+
+        compacted = False
+        for entry in reversed(entries):
+            symbols = entry.get("symbols", [])
+            if not symbols:
+                continue
+
+            # First degrade full signatures to name-only signatures.
+            if any(sym.get("signature") != sym.get("name") for sym in symbols):
+                for sym in symbols:
+                    sym["signature"] = sym["name"]
+                compacted = True
+                break
+
+            # Then drop symbols entirely but keep path/language/summary.
+            entry["symbols"] = []
+            compacted = True
+            break
+
+        if compacted:
+            continue
+
+        # If everything is already summary-only, remove the least important tail entry.
         entries.pop()
 
     # Empty output

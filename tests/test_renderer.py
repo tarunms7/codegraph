@@ -247,6 +247,21 @@ class TestRenderJson:
         result = render_context(ranked, files, budget, format="json")
         assert count_tokens(result) <= budget
 
+    def test_json_small_budget_keeps_compacted_entry(self):
+        fi = _make_fi(
+            "auth.py",
+            symbols=[
+                _make_symbol("authenticate", sig="def authenticate(token: str) -> User"),
+                _make_symbol("authorize", sig="def authorize(user: User, perm: str) -> bool"),
+            ],
+        )
+        ranked = [("auth.py", 0.9)]
+        result = render_context(ranked, {"auth.py": fi}, 120, format="json")
+        data = json.loads(result)
+        assert data["files_included"] >= 1
+        assert data["files"][0]["path"] == "auth.py"
+        assert count_tokens(result) <= 120
+
     def test_token_count_accurate(self):
         fi = _make_fi("a.py", symbols=[_make_symbol("foo")])
         ranked = [("a.py", 0.9)]
