@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+from pathlib import Path
 
 import click
 
-from codegraph import CodeGraph, __version__
+from codegraph import CodeGraph, __version__, resolve_cache_dir
 from codegraph.exceptions import CodeGraphError
 
 
@@ -163,10 +165,7 @@ def stats(repo_path: str) -> None:
 @click.argument("repo_path")
 def clear(repo_path: str) -> None:
     """Clear the .codegraph cache directory."""
-    import os
-    from pathlib import Path
-
-    cache_dir = os.path.join(str(Path(repo_path).resolve()), ".codegraph")
+    cache_dir = resolve_cache_dir(str(Path(repo_path).resolve()))
     if os.path.isdir(cache_dir):
         shutil.rmtree(cache_dir)
         click.echo(f"Cleared cache: {cache_dir}")
