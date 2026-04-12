@@ -285,6 +285,32 @@ class TestCodeGraphCache:
         CodeGraph(str(tmp_path), cache=False)
         assert not (tmp_path / ".codegraph").exists()
 
+    def test_cache_dir_env_override(self, tmp_path, monkeypatch):
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        hello = tmp_path / "hello.py"
+        hello.write_text("def foo(): pass\n")
+        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "init", "--no-verify"],
+            cwd=tmp_path,
+            capture_output=True,
+            env={
+                **os.environ,
+                "GIT_AUTHOR_NAME": "test",
+                "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "test",
+                "GIT_COMMITTER_EMAIL": "t@t",
+            },
+        )
+
+        cache_dir = tmp_path / ".forge" / "codegraph"
+        monkeypatch.setenv("CODEGRAPH_CACHE_DIR", str(cache_dir))
+
+        CodeGraph(str(tmp_path), cache=True)
+        assert cache_dir.is_dir()
+        assert (cache_dir / "index.db").exists()
+        assert not (tmp_path / ".codegraph").exists()
+
 
 class TestCodeGraphRefresh:
     def test_refresh_picks_up_changes(self, tmp_path):

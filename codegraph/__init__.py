@@ -27,6 +27,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "CodeGraph",
+    "resolve_cache_dir",
     "Symbol",
     "FileInfo",
     "Reference",
@@ -59,6 +60,18 @@ _MAX_WALK_FILES = 10_000
 _MAX_FILE_SIZE = 1_000_000  # 1MB
 
 
+def resolve_cache_dir(repo_path: str, explicit_cache_dir: str | None = None) -> str:
+    """Resolve the cache directory for a repo, honoring explicit overrides."""
+    if explicit_cache_dir:
+        return str(Path(explicit_cache_dir).expanduser().resolve())
+
+    env_cache_dir = os.getenv("CODEGRAPH_CACHE_DIR", "").strip()
+    if env_cache_dir:
+        return str(Path(env_cache_dir).expanduser().resolve())
+
+    return os.path.join(repo_path, ".codegraph")
+
+
 class CodeGraph:
     """Main entry point for codegraph — indexes a repository and provides ranked context."""
 
@@ -67,6 +80,7 @@ class CodeGraph:
         repo_path: str,
         *,
         cache: bool = True,
+        cache_dir: str | None = None,
         languages: list[str] | None = None,
     ) -> None:
         self._repo_path = str(Path(repo_path).resolve())
@@ -75,6 +89,7 @@ class CodeGraph:
         if Path(self._repo_path).is_file():
             raise CodeGraphError(f"repo_path must be a directory, got a file: {self._repo_path}")
         self._use_cache = cache
+        self._cache_dir = resolve_cache_dir(self._repo_path, cache_dir) if cache else None
         self._languages = languages
         self._cache_hits = 0
         self._cache_misses = 0
@@ -152,9 +167,8 @@ class CodeGraph:
         # Set up cache if enabled (C11)
         cache = None
         if self._use_cache:
-            cache_dir = os.path.join(self._repo_path, ".codegraph")
             try:
-                cache = IndexCache(cache_dir)
+                cache = IndexCache(self._cache_dir or os.path.join(self._repo_path, ".codegraph"))
             except (CacheError, OSError) as exc:
                 logger.warning("Cache init failed, proceeding without cache: %s", exc)
                 cache = None

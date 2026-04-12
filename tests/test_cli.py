@@ -134,6 +134,19 @@ class TestClearCommand:
         assert result.exit_code == 0
         assert "No cache directory found" in result.output
 
+    def test_clear_respects_cache_dir_env_override(self, runner, sample_repo, monkeypatch):
+        cache_dir = sample_repo / ".forge" / "codegraph"
+        monkeypatch.setenv("CODEGRAPH_CACHE_DIR", str(cache_dir))
+
+        runner.invoke(main, ["map", str(sample_repo)])
+        assert cache_dir.is_dir()
+        assert not (sample_repo / ".codegraph").exists()
+
+        result = runner.invoke(main, ["clear", str(sample_repo)])
+        assert result.exit_code == 0
+        assert "Cleared cache" in result.output
+        assert not cache_dir.exists()
+
 
 class TestLanguageFilter:
     def test_map_language_filter(self, runner, sample_repo):
