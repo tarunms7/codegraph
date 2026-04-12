@@ -85,6 +85,27 @@ class TestQueryCommand:
         assert "files" in data
 
 
+class TestEvidenceCommand:
+    def test_query_evidence_json(self, runner, sample_repo):
+        result = runner.invoke(main, ["evidence", str(sample_repo), "--text", "login token"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["mode"] == "query"
+        assert data["files"]
+        assert data["files"][0]["path"] == "auth.py"
+
+    def test_file_evidence_json(self, runner, sample_repo):
+        result = runner.invoke(main, ["evidence", str(sample_repo), "--file", "auth.py"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["mode"] == "files"
+        assert data["seed_files"] == ["auth.py"]
+
+    def test_evidence_requires_one_input_mode(self, runner, sample_repo):
+        result = runner.invoke(main, ["evidence", str(sample_repo), "--text", "login", "--file", "auth.py"])
+        assert result.exit_code != 0
+
+
 class TestStatsCommand:
     def test_stats_output(self, runner, sample_repo):
         result = runner.invoke(main, ["stats", str(sample_repo)])

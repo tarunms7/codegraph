@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 
 import click
@@ -74,6 +75,57 @@ def query(repo_path: str, text: str, budget: int, fmt: str) -> None:
         cg = CodeGraph(repo_path)
         result = cg.query(text, token_budget=budget, format=fmt)  # type: ignore[arg-type]
         click.echo(result)
+    except CodeGraphError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@main.command()
+@click.argument("repo_path")
+@click.option("--text", help="Natural-language retrieval query.")
+@click.option(
+    "--file",
+    "files",
+    multiple=True,
+    help="Seed file path. Repeat to provide multiple files.",
+)
+@click.option("--limit", default=8, type=int, help="Maximum files to return.")
+@click.option("--symbols", "symbol_limit", default=5, type=int, help="Symbols per file.")
+@click.option(
+    "--neighbors",
+    "neighbor_limit",
+    default=3,
+    type=int,
+    help="Connected neighbor files per result.",
+)
+def evidence(
+    repo_path: str,
+    text: str | None,
+    files: tuple[str, ...],
+    limit: int,
+    symbol_limit: int,
+    neighbor_limit: int,
+) -> None:
+    """Return structured evidence for a query or seed files."""
+    try:
+        if bool(text) == bool(files):
+            raise click.ClickException("Provide either --text or one or more --file values.")
+
+        cg = CodeGraph(repo_path)
+        if text:
+            result = cg.evidence_for_query(
+                text,
+                limit=limit,
+                symbol_limit=symbol_limit,
+                neighbor_limit=neighbor_limit,
+            )
+        else:
+            result = cg.evidence_for_files(
+                list(files),
+                limit=limit,
+                symbol_limit=symbol_limit,
+                neighbor_limit=neighbor_limit,
+            )
+        click.echo(json.dumps(result.to_dict(), indent=2))
     except CodeGraphError as exc:
         raise click.ClickException(str(exc)) from exc
 

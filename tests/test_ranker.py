@@ -5,7 +5,13 @@ from __future__ import annotations
 import networkx as nx
 
 from codegraph.models import FileInfo, Symbol, SymbolKind
-from codegraph.ranker import personalization_for_files, personalization_for_query, rank_files
+from codegraph.ranker import (
+    personalization_for_files,
+    personalization_for_query,
+    rank_files,
+    rank_for_files,
+    rank_for_query,
+)
 
 
 def _make_fi(path: str, symbols: list[Symbol] | None = None) -> FileInfo:
@@ -87,6 +93,135 @@ class TestRankFiles:
         g.add_edge("a.py", "c.py", kind="imports", symbols=["w"])
         scores = rank_files(g)
         assert scores["b.py"] > scores["c.py"]
+
+
+class TestHybridRanking:
+    def test_rank_for_query_prioritizes_direct_lexical_match(self):
+        g = nx.MultiDiGraph()
+        g.add_node(
+            "core.py",
+            file_info=_make_fi(
+                "core.py",
+                symbols=[
+                    Symbol(
+                        name="Dispatcher",
+                        kind=SymbolKind.CLASS,
+                        file="core.py",
+                        line=1,
+                        signature="class Dispatcher",
+                    ),
+                ],
+            ),
+        )
+        g.add_node(
+            "daemon_executor.py",
+            file_info=_make_fi(
+                "daemon_executor.py",
+                symbols=[
+                    Symbol(
+                        name="ExecutorMixin",
+                        kind=SymbolKind.CLASS,
+                        file="daemon_executor.py",
+                        line=1,
+                        signature="class ExecutorMixin",
+                    ),
+                ],
+            ),
+        )
+        g.add_node("helpers.py", file_info=_make_fi("helpers.py"))
+
+        # Make core.py structurally central, but the query targets daemon_executor.py directly.
+        g.add_edge("helpers.py", "core.py", kind="imports", symbols=["a"])
+        g.add_edge("daemon_executor.py", "core.py", kind="imports", symbols=["b"])
+        g.add_edge("core.py", "helpers.py", kind="imports", symbols=["c"])
+
+        scores = rank_for_query(g, "daemon executor")
+        ranked = list(scores.keys())
+        assert ranked[0] == "daemon_executor.py"
+
+    def test_rank_for_query_prioritizes_exact_code_shaped_basename(self):
+        g = nx.MultiDiGraph()
+        g.add_node(
+            "forge/tui/app.py",
+            file_info=_make_fi(
+                "forge/tui/app.py",
+                symbols=[
+                    Symbol(
+                        name="DaemonApp",
+                        kind=SymbolKind.CLASS,
+                        file="forge/tui/app.py",
+                        line=1,
+                        signature="class DaemonApp",
+                    ),
+                ],
+            ),
+        )
+        g.add_node(
+            "forge/core/daemon_executor.py",
+            file_info=_make_fi(
+                "forge/core/daemon_executor.py",
+                symbols=[
+                    Symbol(
+                        name="DaemonExecutor",
+                        kind=SymbolKind.CLASS,
+                        file="forge/core/daemon_executor.py",
+                        line=1,
+                        signature="class DaemonExecutor",
+                    ),
+                ],
+            ),
+        )
+        g.add_edge("forge/tui/app.py", "forge/core/daemon_executor.py", kind="imports", symbols=["x"])
+        g.add_edge("forge/core/daemon_executor.py", "forge/tui/app.py", kind="imports", symbols=["y"])
+
+        scores = rank_for_query(g, "daemon executor")
+        ranked = list(scores.keys())
+        assert ranked[0] == "forge/core/daemon_executor.py"
+
+    def test_rank_for_files_keeps_seed_file_first(self):
+        g = _simple_graph()
+        scores = rank_for_files(g, ["a.py"])
+        ranked = list(scores.keys())
+        assert ranked[0] == "a.py"
+        assert ranked.index("b.py") < ranked.index("c.py")
+
+    def test_rank_for_query_prefers_source_file_over_test_when_query_is_general(self):
+        g = nx.MultiDiGraph()
+        g.add_node(
+            "unified_planner.py",
+            file_info=_make_fi(
+                "unified_planner.py",
+                symbols=[
+                    Symbol(
+                        name="UnifiedPlanner",
+                        kind=SymbolKind.CLASS,
+                        file="unified_planner.py",
+                        line=1,
+                        signature="class UnifiedPlanner",
+                    ),
+                ],
+            ),
+        )
+        g.add_node(
+            "unified_planner_test.py",
+            file_info=_make_fi(
+                "unified_planner_test.py",
+                symbols=[
+                    Symbol(
+                        name="test_unified_planner",
+                        kind=SymbolKind.FUNCTION,
+                        file="unified_planner_test.py",
+                        line=1,
+                        signature="def test_unified_planner()",
+                    ),
+                ],
+            ),
+        )
+        g.add_edge("unified_planner_test.py", "unified_planner.py", kind="tests", symbols=["x"])
+
+        scores = rank_for_query(g, "unified planner")
+        ranked = list(scores.keys())
+        assert ranked[0] == "unified_planner.py"
 
 
 # ===================================================================

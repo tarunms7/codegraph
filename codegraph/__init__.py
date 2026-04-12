@@ -11,7 +11,17 @@ from pathlib import Path
 from typing import Literal
 
 from codegraph.exceptions import CacheError, CodeGraphError, ParseError  # noqa: F401
-from codegraph.models import EdgeKind, FileInfo, Reference, Symbol, SymbolKind
+from codegraph.models import (
+    EdgeKind,
+    EvidenceFile,
+    EvidenceNeighbor,
+    EvidencePack,
+    EvidenceSymbol,
+    FileInfo,
+    Reference,
+    Symbol,
+    SymbolKind,
+)
 
 __version__ = "0.1.0"
 
@@ -22,6 +32,10 @@ __all__ = [
     "Reference",
     "SymbolKind",
     "EdgeKind",
+    "EvidenceSymbol",
+    "EvidenceNeighbor",
+    "EvidenceFile",
+    "EvidencePack",
 ]
 
 logger = logging.getLogger("codegraph")
@@ -243,9 +257,8 @@ class CodeGraph:
                 return json.dumps({"files": [], "error": "No matching files found"})
             return "<!-- No matching files found in index -->"
 
-        p = ranker_mod.personalization_for_files(existing, self._graph)
-        scores = ranker_mod.rank_files(self._graph, personalization=p)
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        scores = ranker_mod.rank_for_files(self._graph, existing)
+        ranked = list(scores.items())
         return renderer_mod.render_context(ranked, self._files, token_budget, format=format)
 
     def query(
@@ -259,9 +272,8 @@ class CodeGraph:
         from codegraph import ranker as ranker_mod
         from codegraph import renderer as renderer_mod
 
-        p = ranker_mod.personalization_for_query(text, self._graph)
-        scores = ranker_mod.rank_files(self._graph, personalization=p)
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        scores = ranker_mod.rank_for_query(self._graph, text)
+        ranked = list(scores.items())
         return renderer_mod.render_context(ranked, self._files, token_budget, format=format)
 
     def repo_map(
@@ -275,8 +287,48 @@ class CodeGraph:
         from codegraph import renderer as renderer_mod
 
         scores = ranker_mod.rank_files(self._graph)
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        ranked = list(scores.items())
         return renderer_mod.render_context(ranked, self._files, token_budget, format=format)
+
+    def evidence_for_query(
+        self,
+        text: str,
+        *,
+        limit: int = 8,
+        symbol_limit: int = 5,
+        neighbor_limit: int = 3,
+    ) -> EvidencePack:
+        """Return structured evidence for a natural-language query."""
+        from codegraph import retrieval as retrieval_mod
+
+        return retrieval_mod.build_evidence_for_query(
+            self._graph,
+            self._files,
+            text,
+            limit=limit,
+            symbol_limit=symbol_limit,
+            neighbor_limit=neighbor_limit,
+        )
+
+    def evidence_for_files(
+        self,
+        files: list[str],
+        *,
+        limit: int = 8,
+        symbol_limit: int = 5,
+        neighbor_limit: int = 3,
+    ) -> EvidencePack:
+        """Return structured evidence for file-seeded retrieval."""
+        from codegraph import retrieval as retrieval_mod
+
+        return retrieval_mod.build_evidence_for_files(
+            self._graph,
+            self._files,
+            files,
+            limit=limit,
+            symbol_limit=symbol_limit,
+            neighbor_limit=neighbor_limit,
+        )
 
     def refresh(self) -> None:
         """Re-scan the repository for changes and update the index (C18)."""
